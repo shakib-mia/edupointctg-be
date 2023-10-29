@@ -107,17 +107,11 @@ async function run() {
         req.headers.token,
         process.env.access_token_secret
       );
-      // console.log(_id);
 
       const profileData = await usersCollection.findOne({
         _id: new ObjectId(_id),
       });
-      console.log(profileData);
-
-      // delete profileData.password;
       res.send(profileData);
-
-      // res.send(user);
     });
   } finally {
   }
