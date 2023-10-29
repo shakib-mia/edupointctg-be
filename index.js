@@ -15,7 +15,8 @@ app.get("/", (req, res) => {
   res.send(`from port ${port}`);
 });
 
-const { MongoClient, ServerApiVersion } = require("mongodb");
+const { MongoClient, ServerApiVersion, ObjectId } = require("mongodb");
+const verifyJWT = require("./verifyJWT");
 const uri = `mongodb+srv://smdshakibmia2001:${process.env.password}@cluster0.v1wxtqe.mongodb.net/?retryWrites=true&w=majority`;
 
 // Create a MongoClient with a MongoClientOptions object to set the Stable API version
@@ -35,19 +36,16 @@ async function run() {
     const usersCollection = client.db("edupointctg").collection("users");
 
     app.post("/register", async (req, res) => {
-      // const {body} =
       const { email } = req.body;
       const exist = await usersCollection.findOne({ email });
-      // console.log(!exist);
+
       if (!exist) {
-        // console.log(req.body);
         const { body } = req;
         bcrypt.hash(body.password, saltRounds, async (err, hash) => {
           body.password = hash;
-          // console.log(body);
 
           const cursor = await usersCollection.insertOne(body);
-          // res.send(cursor);
+
           if (cursor.insertedId) {
             const token = jwt.sign(
               { _id: cursor.insertedId },
@@ -65,7 +63,62 @@ async function run() {
       }
     });
 
-    app.post("/login", (req, res) => {});
+    app.post("/login", async (req, res) => {
+      const { email, password } = req.body;
+      const user = await usersCollection.findOne({ email });
+
+      if (user) {
+        bcrypt.compare(password, user.password, (err, result) => {
+          if (result) {
+            const { _id } = user;
+            const token = jwt.sign({ _id }, process.env.access_token_secret, {
+              expiresIn: "1h",
+            });
+
+            res.send({ token });
+          } else {
+            res.status(403).send({ message: "Incorrect Password" });
+          }
+        });
+      } else {
+        res.status(404).send({ message: "No user Found" });
+      }
+    });
+
+    app.get("/user-with-firebase-auth/:email", async (req, res) => {
+      const { email } = req.params;
+
+      const user = await usersCollection.findOne({ email });
+
+      if (user) {
+        const { _id } = user;
+        const token = jwt.sign({ _id }, process.env.access_token_secret, {
+          expiresIn: "1h",
+        });
+
+        res.send({ token });
+      } else {
+        res.status(404).send("User not found");
+      }
+    });
+
+    app.get("/profile", async (req, res) => {
+      const { _id } = jwt.decode(
+        req.headers.token,
+        process.env.access_token_secret
+      );
+      // console.log(_id);
+
+      const profileData = await usersCollection.findOne({
+        _id: new ObjectId(_id),
+      });
+      console.log(profileData);
+
+      // delete profileData.password;
+      res.send(profileData);
+
+      // res.send(user);
+    });
   } finally {
   }
 }
